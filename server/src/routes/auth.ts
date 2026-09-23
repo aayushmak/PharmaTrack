@@ -41,7 +41,7 @@ authRouter.post("/login", async (req: Request, res: Response) => {
     username: user.username,
   });
 
-  return res.josn({
+  return res.json({
     token,
     user: {
       id: user.id,

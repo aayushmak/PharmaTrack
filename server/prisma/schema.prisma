@@ -11,7 +11,7 @@ generator client {
 
 datasource db {
   provider = "postgresql"
-  url      = env("postgresql://pharmatrack:pharmatrack@db:5432/pharmatrack?schema=public")
+  url      = env("DATABASE_URL")
 }
 
 enum Role {

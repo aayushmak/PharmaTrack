@@ -2,7 +2,7 @@ import {Request, Response, NextFunction} from 'express';
 import jwt from "jsonwebtoken";
 import { Role } from "@prisma/client";
 
-const JWT_SECRET = process.env.JWT_SECRET ?? "change-me-to-a-long-random-string";
+const JWT_SECRET = process.env.JWT_SECRET ?? "R6KklYUTaMAceAzl0SoAYHxN68UQjAsSsnOsl7SaJnY";
 
 export interface AuthPayload {
   userId: string;
@@ -30,13 +30,13 @@ export function requireAuth(
   res: Response,
   next: NextFunction
 ): void {
-  const authHeader = req.headers.authorization;
+  const header = req.headers.authorization;
   if (!header?.startsWith("Bearer ")) {
     res.status(401).json({ error: "Missing or invalid Authorization header" });
     return;
   }
 
-  const token = authHeader.substring("Bearer ".length);
+  const token = header.substring("Bearer ".length);
   try {
     const payload = jwt.verify(token, JWT_SECRET) as AuthPayload;
     req.user = payload;

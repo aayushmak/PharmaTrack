@@ -1,6 +1,6 @@
 services:
   db:
-    image: [postgres:16-alpine]
+    image: "postgres:16-alpine"
     container_name: pharmatrack-db
     restart: unless-stopped
     environment:
@@ -16,24 +16,24 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
-      
-    api:
-      build: ./sever
-      container_name: pharmatrack-api
-      restart: unless-stopped
-      depends_on:
-        db:
-          condition: service_healthy
-      environment:
-        DATABASE_URL: "postgresql://pharmatrack:pharmatrack@db:5432/pharmatrack?schema=public"
-        JWT_SECRET: "change-me-to-a-long-random-string"
-        PORT: "4000"
-      ports:
-        - "4000:4000"
-      volumes:
-        - ./server:/app
-        - /app/node_modules
-      command: sh -c "npm install && npm run dev"
+
+  api:
+    build: ./server
+    container_name: pharmatrack-api
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: "postgresql://pharmatrack:pharmatrack@db:5432/pharmatrack?schema=public"
+      JWT_SECRET: "R6KklYUTaMAceAzl0SoAYHxN68UQjAsSsnOsl7SaJnY"
+      PORT: "4000"
+    ports:
+      - "4000:4000"
+    volumes:
+      - ./server:/app
+      - /app/node_modules
+    command: sh -c "npx prisma generate && npm run dev"
 
 volumes:
   pgdata:
