@@ -1,0 +1,265 @@
+// PharmaTrack - Prisma schema file
+// Data model for inventory, prescriptions, sales/billing, and reporting.
+// Design notes:
+// - Stock is tracked PER BATCH (medicine_batches) for accurate expiry + FEFO.
+// - Every stock change writes a StockMovement row (audit_trail).
+// - Money uses Decimal(10, 2). Only staff (User) authenticate; Customer is a pharmacy-side record, never a login.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("postgresql://pharmatrack:pharmatrack@db:5432/pharmatrack?schema=public")
+}
+
+enum Role {
+  OWNER
+  PHARMACIST
+}
+
+enum MovementType {
+  PURCHASE
+  SALE
+  ADJUSTMENT
+  RETURN
+  EXPIRY_WRITEOFF
+}
+
+enum PaymentMethod {
+  CASH
+  CARD
+  WALLET
+}
+
+model User {
+    id           String   @id @default(uuid())
+  name         String
+  username     String   @unique
+  passwordHash String   @map("password_hash")
+  role         Role     @default(PHARMACIST)
+  isActive     Boolean  @default(true) @map("is_active")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+ 
+  sales     Sale[]
+  purchases Purchase[]
+ 
+  @@map("users")
+}
+
+model Supplier {
+   id        String   @id @default(uuid())
+  name      String
+  phone     String?
+  email     String?
+  address   String?
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+ 
+  batches   MedicineBatch[]
+  purchases Purchase[]
+ 
+  @@map("suppliers")
+}
+
+model Medicine {
+   id                    String   @id @default(uuid())
+  name                  String
+  genericName           String?  @map("generic_name")
+  form                  String? // tablet, syrup, capsule, injection
+  strength              String? // "500mg", "125mg/5ml"
+  unit                  String? // strip, bottle, piece
+  manufacturer          String?
+  category              String? // analgesic, antibiotic...
+  rackLocation          String?  @map("rack_location")
+  reorderLevel          Int      @default(0) @map("reorder_level")
+  requiresPrescription  Boolean  @default(false) @map("requires_prescription")
+  defaultSellingPrice   Decimal? @map("default_selling_price") @db.Decimal(10, 2)
+  isActive              Boolean  @default(true) @map("is_active")
+  createdAt             DateTime @default(now()) @map("created_at")
+  updatedAt             DateTime @updatedAt @map("updated_at")
+ 
+  batches           MedicineBatch[]
+  prescriptionItems PrescriptionItem[]
+  saleItems         SaleItem[]
+  purchaseItems     PurchaseItem[]
+  stockMovements    StockMovement[]
+ 
+  @@index([name])
+  @@index([genericName])
+  @@map("medicines")
+}
+
+model MedicineBatch {
+  id              String   @id @default(uuid())
+  medicineId      String   @map("medicine_id")
+  batchNumber     String?  @map("batch_number")
+  expiryDate      DateTime @map("expiry_date") @db.Date
+  quantityInStock Int      @default(0) @map("quantity_in_stock")
+  purchasePrice   Decimal? @map("purchase_price") @db.Decimal(10, 2)
+  sellingPrice    Decimal  @map("selling_price") @db.Decimal(10, 2)
+  supplierId      String?  @map("supplier_id")
+  receivedDate    DateTime @default(now()) @map("received_date") @db.Date
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+ 
+  medicine       Medicine        @relation(fields: [medicineId], references: [id])
+  supplier       Supplier?       @relation(fields: [supplierId], references: [id])
+  saleItems      SaleItem[]
+  purchaseItems  PurchaseItem[]
+  stockMovements StockMovement[]
+ 
+  @@index([medicineId])
+  @@index([expiryDate])
+  @@map("medicine_batches")
+}
+ 
+model Customer {
+  id        String   @id @default(uuid())
+  name      String
+  phone     String?
+  address   String?
+  notes     String? // allergies, chronic conditions
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+ 
+  prescriptions Prescription[]
+  sales         Sale[]
+ 
+  @@index([phone])
+  @@map("customers")
+}
+ 
+model Prescription {
+  id             String   @id @default(uuid())
+  customerId     String   @map("customer_id")
+  doctorName     String?  @map("doctor_name")
+  clinic         String?
+  prescribedDate DateTime @default(now()) @map("prescribed_date") @db.Date
+  notes          String?
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+ 
+  customer Customer           @relation(fields: [customerId], references: [id])
+  items    PrescriptionItem[]
+  sales    Sale[]
+ 
+  @@index([customerId])
+  @@map("prescriptions")
+}
+ 
+model PrescriptionItem {
+  id             String   @id @default(uuid())
+  prescriptionId String   @map("prescription_id")
+  medicineId     String   @map("medicine_id")
+  dosage         String? // "1 tab twice daily"
+  duration       String? // "5 days"
+  quantity       Int      @default(0)
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+ 
+  prescription Prescription @relation(fields: [prescriptionId], references: [id], onDelete: Cascade)
+  medicine     Medicine     @relation(fields: [medicineId], references: [id])
+ 
+  @@index([prescriptionId])
+  @@map("prescription_items")
+}
+ 
+model Sale {
+  id             String        @id @default(uuid())
+  invoiceNumber  String        @unique @map("invoice_number")
+  customerId     String?       @map("customer_id")
+  prescriptionId String?       @map("prescription_id")
+  soldById       String        @map("sold_by")
+  saleDate       DateTime      @default(now()) @map("sale_date")
+  subtotal       Decimal       @db.Decimal(10, 2)
+  discount       Decimal       @default(0) @db.Decimal(10, 2)
+  total          Decimal       @db.Decimal(10, 2)
+  paymentMethod  PaymentMethod @default(CASH) @map("payment_method")
+  createdAt      DateTime      @default(now()) @map("created_at")
+  updatedAt      DateTime      @updatedAt @map("updated_at")
+ 
+  customer     Customer?     @relation(fields: [customerId], references: [id])
+  prescription Prescription? @relation(fields: [prescriptionId], references: [id])
+  soldBy       User          @relation(fields: [soldById], references: [id])
+  items        SaleItem[]
+ 
+  @@index([customerId])
+  @@index([saleDate])
+  @@map("sales")
+}
+ 
+model SaleItem {
+  id         String   @id @default(uuid())
+  saleId     String   @map("sale_id")
+  medicineId String   @map("medicine_id")
+  batchId    String   @map("batch_id")
+  quantity   Int
+  unitPrice  Decimal  @map("unit_price") @db.Decimal(10, 2)
+  lineTotal  Decimal  @map("line_total") @db.Decimal(10, 2)
+  createdAt  DateTime @default(now()) @map("created_at")
+ 
+  sale     Sale          @relation(fields: [saleId], references: [id], onDelete: Cascade)
+  medicine Medicine      @relation(fields: [medicineId], references: [id])
+  batch    MedicineBatch @relation(fields: [batchId], references: [id])
+ 
+  @@index([saleId])
+  @@map("sale_items")
+}
+ 
+model Purchase {
+  id             String   @id @default(uuid())
+  invoiceNumber  String?  @map("invoice_number")
+  supplierId     String?  @map("supplier_id")
+  receivedById   String   @map("received_by")
+  purchaseDate   DateTime @default(now()) @map("purchase_date")
+  total          Decimal  @default(0) @db.Decimal(10, 2)
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+ 
+  supplier   Supplier?      @relation(fields: [supplierId], references: [id])
+  receivedBy User           @relation(fields: [receivedById], references: [id])
+  items      PurchaseItem[]
+ 
+  @@index([supplierId])
+  @@map("purchases")
+}
+ 
+model PurchaseItem {
+  id            String   @id @default(uuid())
+  purchaseId    String   @map("purchase_id")
+  medicineId    String   @map("medicine_id")
+  batchId       String   @map("batch_id")
+  quantity      Int
+  purchasePrice Decimal  @map("purchase_price") @db.Decimal(10, 2)
+  lineTotal     Decimal  @map("line_total") @db.Decimal(10, 2)
+  createdAt     DateTime @default(now()) @map("created_at")
+ 
+  purchase Purchase      @relation(fields: [purchaseId], references: [id], onDelete: Cascade)
+  medicine Medicine      @relation(fields: [medicineId], references: [id])
+  batch    MedicineBatch @relation(fields: [batchId], references: [id])
+ 
+  @@index([purchaseId])
+  @@map("purchase_items")
+}
+ 
+model StockMovement {
+  id          String       @id @default(uuid())
+  medicineId  String       @map("medicine_id")
+  batchId     String?      @map("batch_id")
+  type        MovementType
+  quantity    Int // signed: +in / -out
+  referenceId String?      @map("reference_id") // sale/purchase id that caused it
+  reason      String? // for manual adjustments
+  movedAt     DateTime     @default(now()) @map("moved_at")
+ 
+  medicine Medicine       @relation(fields: [medicineId], references: [id])
+  batch    MedicineBatch? @relation(fields: [batchId], references: [id])
+ 
+  @@index([medicineId])
+  @@index([movedAt])
+  @@map("stock_movements")
+}
+ 
