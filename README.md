@@ -4,24 +4,30 @@ A pharmacy medicine record system: inventory & stock, customer prescription hist
 
 **Stack:** React + TypeScript + Vite · Node.js + Express + TypeScript · PostgreSQL + Prisma · Docker.
 
-This repo currently contains **Phase 0** — the running skeleton: database schema, seed data, and staff authentication. Feature modules (inventory, billing, prescriptions, reports) are built on top of this in later phases.
+This repo currently contains **Phase 0** (running skeleton — database schema, seed data, staff authentication) and the **Phase 1 inventory API** (medicines, stock batches, suppliers, stock movements). The Phase 1 React screens and later modules (billing, prescriptions, reports) build on top of this.
 
 ## Project layout
 
 ```
 pharmatrack/
-├── docker-compose.yml     # Postgres + API, one command to run
-├── server/                # Express + Prisma API
+├── docker-compose.yml         # Postgres + API, one command to run
+├── server/                    # Express + Prisma API
 │   ├── prisma/
-│   │   ├── schema.prisma  # full data model
-│   │   └── seed.ts        # sample users, suppliers, medicines
+│   │   ├── schema.prisma      # full data model
+│   │   └── seed.ts            # sample users, suppliers, medicines
 │   └── src/
-│       ├── index.ts       # server entry
-│       ├── app.ts         # Express app + routes
-│       ├── lib/prisma.ts  # Prisma client singleton
-│       ├── middleware/auth.ts
-│       └── routes/auth.ts # login + current user
-└── client/                # (added in Phase 1 — React app)
+│       ├── index.ts           # server entry
+│       ├── app.ts             # Express app + route mounting + error handler
+│       ├── lib/
+│       │   ├── prisma.ts      # Prisma client singleton
+│       │   └── asyncHandler.ts# wraps async routes for clean error handling
+│       ├── middleware/auth.ts # JWT verify + role guard
+│       └── routes/
+│           ├── auth.ts        # login + current user
+│           ├── medicines.ts   # medicines CRUD, stock list, movements
+│           ├── batches.ts     # receive stock, adjust stock
+│           └── suppliers.ts   # list + add suppliers
+└── client/                    # (added in Phase 1b — React app)
 ```
 
 ## Running it
@@ -64,6 +70,36 @@ curl -X POST localhost:4000/api/auth/login \
 # use the returned token
 curl localhost:4000/api/auth/me -H 'Authorization: Bearer <token>'
 ```
+
+## API reference
+
+All routes except `/api/health` and `/api/auth/login` require an `Authorization: Bearer <token>` header.
+
+### Auth
+| Method | Path | Purpose |
+|---|---|---|
+| POST | `/api/auth/login` | Exchange username/password for a JWT |
+| GET | `/api/auth/me` | Current authenticated user |
+
+### Medicines & stock (Phase 1)
+| Method | Path | Purpose |
+|---|---|---|
+| GET | `/api/medicines` | List medicines with computed `totalStock` + `isLowStock`. Supports `?q=` (name/generic search) and `?category=` |
+| GET | `/api/medicines/:id` | Medicine detail with its batches (soonest expiry first) |
+| POST | `/api/medicines` | Add a medicine to the catalog |
+| PUT | `/api/medicines/:id` | Update a medicine (partial allowed) |
+| DELETE | `/api/medicines/:id` | Soft-delete (sets `isActive=false`, keeps history) |
+| GET | `/api/medicines/:id/movements` | Stock movement audit trail |
+| POST | `/api/batches` | Receive stock — creates a batch + `PURCHASE` movement (atomic) |
+| POST | `/api/batches/:id/adjust` | Manual stock correction — signed `quantity` + `reason` (atomic; rejects negative stock) |
+
+### Suppliers
+| Method | Path | Purpose |
+|---|---|---|
+| GET | `/api/suppliers` | List suppliers |
+| POST | `/api/suppliers` | Add a supplier |
+
+**Design rule:** a medicine's stock is never stored directly — it's summed from its batches on read, and every change (receive, sale, adjustment) writes a `stock_movements` row so counts and history can never disagree.
 
 ## Notes on scope
 
