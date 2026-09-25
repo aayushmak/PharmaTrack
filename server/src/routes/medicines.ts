@@ -113,3 +113,60 @@ medicinesRouter.post(
   })
 )
 
+// PUT /api/medicine/:id - update catalog fields (partial allowed).
+medicinesRouter.put(
+  "/:id",
+  asyncHandler(async (req, res) => {
+    const parsed = medicineInput.partial().safeParse(req.body)
+    if(!parsed.success) {
+      return res
+        .status(400)
+        .json({ error: "Invalid medicine data", details: parsed.error.flatten()})
+    }
+
+    const existing = await prisma.medicine.findUnique({
+      where: { id: req.params.id},
+    })
+    if (!existing || !existing.isActive) {
+      return res.status(404).json({ error: "Medicine not found"})
+    }
+
+    const medicine = await prisma.medicine.update({
+      where: { id: req.params.id},
+      data: parsed.data,
+    })
+    res.json({ medicine})
+  })
+)
+
+// DELETE /api/medicine/:id - soft delete (keep history intact).
+medicinesRouter.delete(
+  "/:id",
+  asyncHandler(async (req, res) => {
+    const existing = await prisma.medicine.findUnique({
+      where: {id: req.params.id},
+    })
+    if (!existing || !existing.isActive) {
+      return res.status(404).json({ error: "Medicine not found"})
+    }
+
+    await prisma.medicine.update({
+      where: { id: req.params.id},
+      data: {isActive: false},
+    })
+    res.json({ ok: true})
+  })
+)
+
+// GET /api/medicines/:id/movements - stock movement audit trial.
+medicinesRouter.get(
+  "/:id/movements",
+  asyncHandler( async (req, res) => {
+    const movements = await prisma.stockMovement.findMany({
+      where: { medicineId: req.params.id},
+      orderBy: { movedAt: "desc"},
+      include: { batch: { select: { batchNumber: true, expiryDate: true}}}
+    })
+    res.json({ movements })
+  })
+)
