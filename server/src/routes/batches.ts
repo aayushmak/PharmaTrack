@@ -72,3 +72,60 @@ batchesRouter.post(
   })
 )
 
+const adjustInput = z.object({
+  // Signed: negative reduces stock (breakage, correction), positive adds.
+  quantity: z.number().int().refine((n) => n !== 0, {
+    message: "quantity cannot be zero",
+  }),
+  reason: z.string().min(1),
+})
+
+// POST /api/batches/:id/adjust - manual stock correction with a reason.
+batchesRouter.post(
+  "/:id/adjust",
+  asyncHandler(async (req, res) => {
+    const parsed = adjustInput.safeParse(req.body)
+    if (!parsed.success) {
+      return res
+        .status(400)
+        .json({ error: "Invalid adjustment", details: parsed.error.flatten()})
+    }
+    const { quantity, reason} = parsed.data;
+
+    const result = await prisma.$transaction(async (tx) => {
+      const batch = await tx.medicineBatch.findUnique({
+        where: { id: req.params.id},
+      })
+      if (!batch) return { error: "Batch not found" as const}
+
+      const newQty = batch.quantityInStock + quantity
+      if (newQty < 0) {
+        return { error: "Adjustment would make stock negative " as const}
+      }
+
+      const updated = await tx.medicineBatch.update({
+        where: { id: batch.id},
+        data: { quantityInStock: newQty},
+      })
+
+      await tx.stockMovement.create({
+        data: {
+          medicineId: batch.medicineId,
+          batchId: batch.id,
+          type: "ADJUSTMENT",
+          quantity,
+          reason,
+        }
+      })
+
+      return { batch: updated}
+    })
+
+    if ("error" in result) {
+      const code = result.error === "Batch not found" ? 404 :400
+      return res.status(code).json({ error: result.error})
+    }
+
+    res.json({ batch: result.batch})
+  })
+)
