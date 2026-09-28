@@ -1,7 +1,9 @@
-import express from "express";
+import express, { Request, Response, NextFunction } from "express";
 import cors from "cors";
 import { authRouter } from "./routes/auth";
-import { requireAuth } from "./middleware/auth";
+import { medicinesRouter } from "./routes/medicines";
+import { batchesRouter } from "./routes/batches";
+import { suppliersRouter } from "./routes/suppliers";
 
 export function createApp() {
   const app = express();
@@ -17,15 +19,23 @@ export function createApp() {
   // Auth routes.
   app.use("/api/auth", authRouter);
 
-  // Example of a protected placeholder. Feature routers (inventory, sales,
-  // prescriptions, reports) get mounted here in later phases, behind requireAuth.
-  app.get("/api/protected/ping", requireAuth, (req, res) => {
-    res.json({ message: `Hello ${req.user!.username}`, role: req.user!.role });
-  });
+  // Inventory (Phase 1). Each router applies requireAuth internally.
+  app.use("/api/medicines", medicinesRouter);
+  app.use("/api/batches", batchesRouter);
+  app.use("/api/suppliers", suppliersRouter);
 
   // 404 fallback.
   app.use((_req, res) => {
     res.status(404).json({ error: "Not found" });
+  });
+
+  // Central error handler — asyncHandler forwards thrown errors here.
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  app.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {
+    console.error("Unhandled error:", err);
+    const message =
+      err instanceof Error ? err.message : "Internal server error";
+    res.status(500).json({ error: message });
   });
 
   return app;
