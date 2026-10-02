@@ -13,7 +13,7 @@ export function clearToken() {
   localStorage.removeItem(TOKEN_KEY)
 }
 
-type Options = { method?: string: body?: unknown}
+type Options = { method?: string; body?: unknown}
 
 export async function api<T>(path: string, opts: Options = {}): Promise<T> {
   const token = getToken()
