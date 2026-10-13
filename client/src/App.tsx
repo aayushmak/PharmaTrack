@@ -3,6 +3,9 @@ import { LoginPage } from "./pages/LoginPage";
 import { MedicinesPage } from "./pages/MedicinesPage";
 import { MedicineDetailPage } from "./pages/MedicineDetailPage";
 import { MedicineFormPage } from "./pages/MedicineFormPage";
+import { SellPage } from "./pages/SellPage";
+import { SalesPage } from "./pages/SalesPage";
+import { ReceiptPage } from "./pages/ReceiptPage";
 import { ProtectedRoute } from "./components/ProtectedRoute";
 import { Layout } from "./components/Layout";
 
@@ -19,12 +22,15 @@ export default function App() {
   return (
     <Routes>
       <Route path="/login" element={<LoginPage />} />
-      <Route path="/" element={<Navigate to="/medicines" replace />} />
+      <Route path="/" element={<Navigate to="/sell" replace />} />
+      <Route path="/sell" element={page(<SellPage />)} />
+      <Route path="/sales" element={page(<SalesPage />)} />
+      <Route path="/sales/:id" element={page(<ReceiptPage />)} />
       <Route path="/medicines" element={page(<MedicinesPage />)} />
       <Route path="/medicines/new" element={page(<MedicineFormPage />)} />
       <Route path="/medicines/:id" element={page(<MedicineDetailPage />)} />
       <Route path="/medicines/:id/edit" element={page(<MedicineFormPage />)} />
-      <Route path="*" element={<Navigate to="/medicines" replace />} />
+      <Route path="*" element={<Navigate to="/sell" replace />} />
     </Routes>
   );
 }

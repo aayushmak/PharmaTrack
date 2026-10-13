@@ -4,6 +4,7 @@ import { authRouter } from "./routes/auth";
 import { medicinesRouter } from "./routes/medicines";
 import { batchesRouter } from "./routes/batches";
 import { suppliersRouter } from "./routes/suppliers";
+import {salesRouter} from "./routes/sales";
 
 export function createApp() {
   const app = express();
@@ -23,7 +24,8 @@ export function createApp() {
   app.use("/api/medicines", medicinesRouter);
   app.use("/api/batches", batchesRouter);
   app.use("/api/suppliers", suppliersRouter);
-
+  app.use("/api/sales", salesRouter);
+  
   // 404 fallback.
   app.use((_req, res) => {
     res.status(404).json({ error: "Not found" });
